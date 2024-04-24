@@ -4,18 +4,29 @@ export const ThemeContext = createContext();
 
 export const useTheme = () => useContext(ThemeContext);
 
+const primaryColor = '#000000';
+const darkPrimaryColor = '#ffffff';
+const secondaryColor = '#ffffff';
+const darkSecondaryColor = '#000000';
+const accentColor = '#ffc107';
+const darkAccentColor = '#9932CC';
+const mode = 'light';
+const darkMode = 'dark';
+
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState({
-    mode: 'light', // 'light' or 'dark'
-    primaryColor: '#007bff', // Example primary color
-    secondaryColor: '#6c757d', // Example secondary color
-    accentColor: '#ffc107', // Example accent color
+    mode: darkMode, 
+    primaryColor: darkPrimaryColor, 
+    secondaryColor: darkSecondaryColor, 
+    accentColor: darkAccentColor  ,
   });
 
   const toggleTheme = () => {
     setTheme(currentTheme => ({
-      ...currentTheme,
-      mode: currentTheme.mode === 'light' ? 'dark' : 'light',
+      mode: currentTheme.mode === mode ? darkMode : mode,
+      primaryColor: currentTheme.primaryColor === primaryColor ? darkPrimaryColor : primaryColor,
+      secondaryColor: currentTheme.secondaryColor === secondaryColor ? darkSecondaryColor : secondaryColor,
+      accentColor: currentTheme.accentColor === accentColor ? darkAccentColor : accentColor,
     }));
   };
 

@@ -1,18 +1,27 @@
 import React from 'react';
-import { useTheme } from '../ThemeContext'; 
+import { useTheme } from '../ThemeContext';
+import { IconButton } from '@mui/material';
+import Brightness4Icon from '@mui/icons-material/Brightness4';
+import Brightness7Icon from '@mui/icons-material/Brightness7';
 
 const Navigation = () => {
-  const { toggleTheme } = useTheme();
+  const { toggleTheme, mode, primaryColor, secondaryColor, accentColor } = useTheme();
+  const iconColorClass = mode === 'light' ? `text-black` : `text-white`;
 
   return (
-    <nav className="flex justify-between items-center p-4 bg-gray-800 text-white">
-      <h1 className="text-xl font-bold">vibecast</h1>
-      <button
-        onClick={toggleTheme}
-        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-      >
-        Change Theme
-      </button>
+    <nav 
+      className={`flex justify-between items-center p-4 relative bg-opacity-0 border-b border-solid border-${accentColor}50 backdrop-blur-sm`}
+      style={{
+        borderBottomColor: accentColor,
+        backgroundColor: secondaryColor
+      }}
+    >
+      <h1 className={`text-4xl font-bold ${iconColorClass}`}>Vibecast</h1>
+      <IconButton onClick={toggleTheme}>
+        <div className={iconColorClass}>
+          {mode === 'light' ? <Brightness4Icon /> : <Brightness7Icon />}
+        </div>
+      </IconButton>
     </nav>
   );
 };
