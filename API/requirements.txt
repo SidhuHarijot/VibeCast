@@ -1,4 +1,9 @@
 fastapi
 requests
-csv
-base64
+uvicorn
+spotipy
+python-dotenv
+pylast
+pydantic
+httpx
+asyncio

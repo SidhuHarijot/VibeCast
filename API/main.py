@@ -1,88 +1,251 @@
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import RedirectResponse
-import requests
-import os
-import base64
+from spotipy import Spotify
+from spotipy.oauth2 import SpotifyOAuth
+import dotenv
+from pydantic import BaseModel
 import csv
+import httpx
+import pylast
+from datetime import date
+import asyncio
+from fastapi.middleware.cors import CORSMiddleware
+
+# This will hold all city data from the CSV file
+all_cities = {}
+
+mood_genre_mapping = {
+    "happy": ["pop", "dance", "disco", "funk", "electropop", "house", "bubblegum", "reggae", "ska", "upbeat", "soul", "boogie", "sassy", "nu-disco", "future", "funk", "nudisco", "party", "1999", "soulful", "groovy", "synth", "bop", "catchy", "uplifting", "joyful", "summer", "happy", "playful"],
+    "sad": ["blues", "ballad", "acoustic", "singer-songwriter", "piano", "emo", "slow", "melancholic", "soft", "minor", "downbeat", "sad", "heartbreak", "melancholic", "pensive", "down", "breakup", "cry", "mournful", "sorrowful", "tearful", "weepy", "doleful", "gloomy", "lugubrious"],
+    "chill": ["ambient", "lounge", "trip-hop", "soft rock", "downtempo", "jazz", "chillwave", "instrumental", "acoustic", "lo-fi", "mellow", "chill", "calm", "relaxing", "soothing", "serene", "quiet", "tranquil", "peaceful", "smooth", "ethereal", "airy", "gentle", "light"],
+    "motivated": ["rock", "hard rock", "metal", "hip-hop", "drum and bass", "anthem", "electronic", "uplifting", "energetic", "power pop", "motivated", "drive", "driving", "pump", "workout", "gym", "upbeat", "energize", "excite", "thrilling", "amp", "amped", "psyched"],
+    "soft": ["acoustic", "soft rock", "easy listening", "neoclassical", "quiet", "folk", "serene", "light", "peaceful", "smooth", "lullaby", "tender", "gentle", "soothing", "delicate", "subdued", "tranquil", "placid", "calm", "restful", "whispery", "ethereal", "airy", "featherlight"],
+}
+
+weather_mood_mapping = {
+    200: ["sad"],
+    201: ["sad"],
+    202: ["sad"],
+    210: ["sad"],
+    211: ["sad"],
+    212: ["sad"],
+    221: ["sad"],
+    230: ["sad"],
+    231: ["sad"],
+    232: ["sad"],
+    300: ["soft", "chill"],
+    301: ["soft", "chill"],
+    302: ["soft", "chill"],
+    310: ["soft", "chill"],
+    311: ["soft", "chill"],
+    312: ["soft", "chill"],
+    313: ["soft", "chill"],
+    314: ["soft", "chill"],
+    321: ["soft", "chill"],
+    500: ["soft", "happy"],
+    501: ["soft"],
+    502: ["sad"],
+    503: ["sad"],
+    504: ["sad"],
+    511: ["sad"],
+    520: ["chill"],
+    521: ["chill"],
+    522: ["chill"],
+    531: ["chill"],
+    600: ["happy"],
+    601: ["happy"],
+    602: ["happy"],
+    611: ["chill"],
+    612: ["chill"],
+    613: ["chill"],
+    615: ["chill"],
+    616: ["chill"],
+    620: ["happy"],
+    621: ["happy"],
+    622: ["happy"],
+    701: ["soft"],
+    711: ["sad"],
+    721: ["soft"],
+    731: ["chill"],
+    741: ["soft"],
+    751: ["sad"],
+    761: ["sad"],
+    762: ["sad"],
+    771: ["motivated"],
+    781: ["sad"],
+    800: ["happy", "motivated"],
+    801: ["happy", "soft"],
+    802: ["happy", "soft"],
+    803: ["soft"],
+    804: ["soft", "chill"]
+}
+
 
 app = FastAPI()
 
-client_id = "4dc46910d266416eade1b06efd289a82"
-client_secret = "abf0bf2fb6944d5a8f351e40c25ee017"
+origins = [
+    "http://localhost.tiangolo.com",
+    "https://localhost.tiangolo.com",
+    "http://localhost",
+    "http://localhost:8080",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://localhost:5000",
+    "https://client-resume-upload-p9g0bmvaf-harijot-singhs-projects.vercel.app",
+    "https://client-resume-upload.vercel.app",
+    "https://client-resume-upload-git-master-harijot-singhs-projects.vercel.app"
+]
 
-# Helper function to encode the client credentials
-def get_client_credentials():
-    return base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Step 1: Login Endpoint to Redirect User for Authorization
+@app.on_event("startup")
+def load_city_data():
+    with open('data/worldcities.csv', 'r', encoding='utf-8') as file:
+        csv_reader = csv.DictReader(file)
+        for row in csv_reader:
+            all_cities[row['city_ascii']] = {"country": row['country'], "iso2": row['iso2'], "lat": float(row['lat']), "lon": float(row['lng'])}
+            
+
+envFile = dotenv.find_dotenv()
+dotenv.load_dotenv(envFile)
+
+pylastNetwork = pylast.LastFMNetwork(api_key=dotenv.get_key(envFile, 'LASTFM_API_KEY'), api_secret=dotenv.get_key(envFile, 'LASTFM_SHARED_SECRET'))
+
+client_id = dotenv.get_key(envFile, 'SPOTIFY_CLIENT_ID')
+client_secret = dotenv.get_key(envFile, 'SPOTIFY_CLIENT_SECRET')
+redirect_uri = dotenv.get_key(envFile, 'REDIRECT_URI')  # Ensure this is set to your server/callback endpoint
+scope = "playlist-read-private playlist-modify-public playlist-modify-private"
+openweather_api_key = dotenv.get_key(envFile, "WEATHER_API")
+
+sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, scope=scope)
+
+class Track(BaseModel):
+    name: str
+    genre: list[str]
+    id: str
+
+class Cities(BaseModel):
+    name: str
+    country: str
+    iso2: str
+    lat: float
+    lon: float
+
+
+class PlayList(BaseModel):
+    name: str
+    id: str
+    tracks: list[Track]
+
+
+class CompleteResponse(BaseModel):
+    weatherCode: int
+    weatherDescription: str
+    playlist: PlayList
+
+@app.get("/cities", response_model=list[Cities])
+def get_cities():
+    cities = []
+    for city in all_cities.keys():
+        cities.append(Cities(name=city, country=all_cities[city]['country'], iso2=all_cities[city]['iso2'], lat=all_cities[city]['lat'], lon=all_cities[city]['lon']))
+    print(cities)
+    return cities
+
 @app.get("/login")
 def login():
-    # client_id = os.getenv("SPOTIFY_CLIENT_ID")
-    # print("[LOGIN]: " + ", ".join(os.environ))
-    # client_id = os.environ["SPOTIFY_CLIENT_ID"]
-    # print("[LOGIN]: " + os.environ)
-    redirect_uri = "http://localhost:8000/callback"
-    scope = "user-read-private user-read-email"
-    # Direct user to Spotify authorization URL
-    return RedirectResponse(
-        url=f"https://accounts.spotify.com/authorize?response_type=code&client_id={client_id}&scope={scope}&redirect_uri={redirect_uri}"
-    )
+    """ Redirect to Spotify to authorize and get the initial refresh token """
+    auth_url = sp_oauth.get_authorize_url()
+    return RedirectResponse(auth_url)
 
-# Step 2: Callback Endpoint to Handle the Redirect from Spotify
+@app.get("/moodFiltered", response_model=CompleteResponse)
+async def get_mood_filtered(city: str, playlist: PlayList):
+    """ Get the mood-filtered playlist for a city """
+    # Find the city in the list of cities
+    cityData = all_cities.get(city)
+    lat, lon = cityData.get('lat'), cityData.get('lon')
+    weather_url = f"https://api.openweathermap.org/data/3.0/onecall?lat={lat}&lon={lon}&exclude=minutely,hourly,daily,alerts&appid={openweather_api_key}&units=metric"
+    
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(weather_url)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail="Error fetching weather data")
+    weather_data = resp.json()
+    weather_code = int(weather_data["current"]["weather"][0]["id"])
+    moods = weather_mood_mapping.get(weather_code, ["Neutral"])
+    tags = []
+    for mood in moods:
+        tags.extend(mood_genre_mapping.get(mood, []))
+    new_playlist = PlayList(name="Playlist " + city + " " + str(date.today()) + " " + " ".join(mood for mood in moods), id="1", tracks=[])
+    for track in playlist.tracks:
+        if track.genre is None:
+            con
+        if any(tag in track.genre for tag in tags):
+            new_playlist.tracks.append(track)
+
+    # Construct and return the complete response
+    return CompleteResponse(
+        weatherCode=weather_code,
+        weatherDescription=weather_data["current"]["weather"][0]["description"],
+        playlist=new_playlist
+        )
+
 @app.get("/callback")
-def callback(code: str, state: str = None):
-    print("[]")
-    client_credentials = get_client_credentials()
-    token_url = "https://accounts.spotify.com/api/token"
-    redirect_uri = "http://localhost:8000/callback"
-    headers = {
-        "Authorization": f"Basic {client_credentials}",
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    body = {
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": redirect_uri
-    }
-    response = requests.post(token_url, headers=headers, data=body)
-    if response.status_code != 200:
-        raise HTTPException(status_code=400, detail="Failed to fetch access token")
-    
-    token_data = response.json()
-    access_token = token_data.get("access_token")
+def callback(code: str):
+    """ Handle callback from Spotify, store refresh token """
+    token_info = sp_oauth.get_access_token(code)
+    if 'refresh_token' in token_info:
+        dotenv.set_key(envFile, "SPOTIFY_REFRESH_TOKEN", token_info['refresh_token'])
+        return {"message": "Authentication successful", "refresh_token": token_info['refresh_token']}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to obtain refresh token")
 
-    # Store the token in a temporary file
-    with open('temp_file/token.txt', 'w') as f:
-        f.write(access_token)
+def get_spotify_client():
+    """ Returns a Spotify client using the refresh token for automated access token renewal """
+    refresh_token = dotenv.get_key(envFile, 'SPOTIFY_REFRESH_TOKEN')
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="No refresh token found. Please log in.")
     
-    return {"message": "Authorization successful, token stored."}
+    token_info = sp_oauth.refresh_access_token(refresh_token)
+    return Spotify(auth=token_info['access_token'])
 
-# Helper function to retrieve the access token from a file
-def get_access_token():
-    try:
-        with open('temp_file/token.txt', 'r') as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Token file not found")
+@app.get("/top-50/{country_code}")
+def get_top_50(country_code: str):
+    spotify = get_spotify_client()
+    results = spotify.search(q="top 50", type='playlist', limit=50, market=country_code)
+    tracks = spotify.playlist_tracks(results['playlists']['items'][0]['id'], fields='items(track(name, id, artists(id,name)))')
+    tracksList = []
+    for track in tracks["items"]:
+        lastfmTrack = pylastNetwork.get_track(track['track']['artists'][0]['name'], track['track']['name'])
+        tags = lastfmTrack.get_top_tags()
+        taglist = []
+        for tag in tags:
+            taglist.append(tag.item.get_name())
+        if tags:
+            tracksList.append(Track(name=track['track']['name'], id=track['track']['id'], genre=taglist))
+        else:
+            tracksList.append(Track(name=track['track']['name'], id=track['track']['id'], genre=[""]))
+    return PlayList(name="Top 50 ", id=results['playlists']['items'][0]['id'], tracks=tracksList)
 
-# Step 3: Fetch Genres using the stored access token
-@app.get("/fetch-genres")
-def fetch_genres(access_token: str = Depends(get_access_token)):
-    url = "https://api.spotify.com/v1/recommendations/available-genre-seeds"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        raise HTTPException(status_code=400, detail="Could not fetch genres")
-    
-    genres = response.json().get('genres', [])
-    if genres:
-        # Save genres to a CSV file
-        with open('temp_file/genres.csv', 'w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(['Genre'])
-            for genre in genres:
-                writer.writerow([genre])
-    
-    return {"message": "Genres fetched and saved successfully", "file": "temp_file/genres.csv"}
+@app.get("/spotify-playlist/")
+def create_playlist(playlist: PlayList):
+    spotify = get_spotify_client()
+    tracks = playlist.tracks
+    track_ids = [track.id for track in tracks]
+    username = spotify.current_user()['id']
+    playlist_created = spotify.user_playlist_create(user=username, name=playlist.name, public=True)
+    playlist_id = playlist_created['id']
+    spotify.user_playlist_add_tracks(user=username, playlist_id=playlist_id, tracks=track_ids)
+    return playlist_created["external_urls"]["spotify"]
 
-# Ensure environmental variables and temp_file directory are properly set up.
+if __name__ == "__main__":
+    load_city_data()
+    playlist = get_top_50("JP")
+    new_playlist = asyncio.run(get_mood_filtered("Tokyo", playlist))
+    print(new_playlist)
+    create_playlist(new_playlist.playlist)
