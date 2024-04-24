@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTheme } from '../ThemeContext'; // Adjust the path if necessary
+import { useTheme } from '../ThemeContext'; 
 
 const Navigation = () => {
   const { toggleTheme } = useTheme();

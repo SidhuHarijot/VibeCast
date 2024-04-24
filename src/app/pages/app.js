@@ -1,5 +1,5 @@
 import React from 'react';
-import { ThemeProvider } from '../ThemeContext'; // Adjust the path if necessary
+import { ThemeProvider } from '../ThemeContext';
 import '../styles/globals.css';
 
 function MyApp({ Component, pageProps }) {
