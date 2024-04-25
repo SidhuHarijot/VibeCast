@@ -19,6 +19,9 @@ const Footer = () => {
         <a href="https://vibecast-api.onrender.com/docs" target='_blank' className="hover:text-gray-500">
           <ApiIcon /> Api Docs
         </a>
+        <a href="https://github.com/SidhuHarijot/VibeCast-API" target="_blank" rel="noopener noreferrer" className="hover:text-gray-500">
+          <GitHubIcon /> Api Source
+        </a>
       </div>
     </footer>
   );
