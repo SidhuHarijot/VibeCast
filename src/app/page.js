@@ -57,7 +57,7 @@ export default function Home() {
           {filteredCities.map((city, index) => (
             <li key={index} className="p-2 hover:bg-gray-200 cursor-pointer"
                 onClick={() => handleCityClick(city.name, city.iso2)}>
-              <div className="block" style={{ color: primaryColor }}>{city.name}</div>
+              <div className="block" style={{ color: primaryColor }}>{`${city.name}, ${city.iso2}`}</div>
             </li>
           ))}
         </ul>
