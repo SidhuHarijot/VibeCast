@@ -37,7 +37,7 @@ const TrackCard = ({ track, fontColor, bgColor, accentColor, randomColors, label
       </div>
       <div className="flex flex-row justify-between items-center p-1">
         <div className="px-1">
-            <SmallCardHolder items={track.artists} fontColor={fontColor} bgColorList={[bgColor]} borderColors={randomColors} tailwindCSS="transition-transform duration-300 hover:scale-110" 
+            <SmallCardHolder items={track.artists} fontColor={fontColor} bgColorList={[bgColor]} borderColors={randomColors} overflowHidden={true} tailwindCSS="transition-transform duration-300 hover:scale-110" 
             style={{
                 backgroundColor: labelColor,
                 color: fontColor,
